@@ -1,0 +1,39 @@
+version: "3"
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    hostname: rabbitmq-crawlclima
+    ports:
+      - 45672:5672
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5672"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 10s  # requires docker-compose 3.4
+    restart: always
+
+  worker:
+    build:
+      context: ".."
+      dockerfile: "containers/Dockerfile"
+      args:
+        HOST_UID: ${HOST_UID}
+        HOST_GID: ${HOST_GID}
+    env_file:
+      - ../.env
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq-crawlclima:5672
+    volumes:
+      - ./containers/log/:/opt/services/log/
+    depends_on:
+      - rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", 'celery --app crawlclima.celeryapp.app inspect ping -d "celery@$${HOSTNAME}"']
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
